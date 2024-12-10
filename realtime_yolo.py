@@ -1,36 +1,50 @@
-from ultralytics import YOLO
 import cv2
 
-# Load the YOLOv8 pre-trained model
-model = YOLO('yolov8n.pt')  # 'n' stands for nano, a lightweight version
-
-# Initialize webcam
-cap = cv2.VideoCapture(0)  # Use 0 for the default webcam
+# Initialize the video capture (webcam)
+cap = cv2.VideoCapture(0)
 
 if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 
-# Process webcam frames in real-time
+# Set the video resolution
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+# Initialize the MultiTracker
+multi_tracker = cv2.MultiTracker_create()
+
+# Initialize a bounding box (for object tracking)
+bbox = None
+
 while True:
     ret, frame = cap.read()
     if not ret:
         print("Error: Failed to capture frame.")
         break
 
-    # Run YOLOv8 inference on the frame
-    results = model(frame, show=False)  # Set show=False to prevent ultralytics' default window
+    # Initialize tracking when the user selects the object
+    if bbox is None:
+        # Select the bounding box for tracking (you can use cv2.selectROI() to manually select the object)
+        bbox = cv2.selectROI("Frame", frame, fromCenter=False, showCrosshair=True)
+        multi_tracker.add(cv2.TrackerCSRT_create(), frame, bbox)
 
-    # Annotate the frame with detected objects
-    annotated_frame = results[0].plot()
+    # Update the trackers and get the new bounding box
+    success, boxes = multi_tracker.update(frame)
 
-    # Display the annotated frame
-    cv2.imshow("YOLOv8 Real-Time Detection", annotated_frame)
+    if success:
+        for box in boxes:
+            x, y, w, h = [int(v) for v in box]
+            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)  # Draw the bounding box
+        cv2.putText(frame, "Tracking Object", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
+    else:
+        cv2.putText(frame, "Lost Track", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
-    # Exit when 'q' is pressed
+    cv2.imshow("Tracking", frame)
+
+    # Press 'q' to quit
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Release the webcam and close windows
 cap.release()
 cv2.destroyAllWindows()
